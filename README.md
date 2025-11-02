@@ -22,19 +22,23 @@
 ### 1️⃣ 單影片下載
 
 #### PowerShell
+```
 .\Smart-YTDLP.ps1 ""https://www.youtube.com/watch?v=影片ID""
-
+```
 #### macOS Bash
+```
 ./Smart-YTDLP.sh ""https://www.youtube.com/watch?v=影片ID""
-
+```
 ### 2️⃣ 播放清單下載
 
 #### PowerShell
+```
 .\Smart-YTDLP.ps1 ""https://www.youtube.com/playlist?list=播放清單ID""
-
+```
 #### macOS Bash
+```
 ./Smart-YTDLP.sh ""https://www.youtube.com/playlist?list=播放清單ID""
-
+```
 ---
 
 ## cookies.txt 使用說明
@@ -50,8 +54,8 @@
 
 ---
 
-``` ##檔案結構示意
-
+##檔案結構示意
+```
 Smart-YTDLP/
 ├─ Smart-YTDLP.ps1
 ├─ Smart-YTDLP.sh
@@ -92,4 +96,5 @@ Smart-YTDLP/
 3. 執行腳本下載影片或播放清單  
 4. 影片會依頻道建立資料夾，自動整理  
 5. 定期更新 yt-dlp 以支援最新 YouTube 變更
+
 
