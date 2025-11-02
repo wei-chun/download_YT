@@ -1,4 +1,3 @@
-readme_content = """
 Smart-YTDLP
 
 智慧 YouTube 下載器（PowerShell & macOS Bash 版本）
@@ -102,3 +101,4 @@ macOS Bash：brew upgrade yt-dlp
 3. 影片或播放清單下載失敗  
    → 嘗試更新 yt-dlp 或檢查影片 URL 是否正確。
 """
+
