@@ -63,6 +63,7 @@ Write-Host "📺 偵測影片類型：$type" -ForegroundColor Cyan
 # -----------------------
 Write-Section "取得頻道資訊..."
 $channelName = yt-dlp --get-filename -o "%(channel)s" $VideoURL 2>$null
+$channelName = ($channelName | Select-Object -First 1).ToString()  # 取第一行並轉字串
 if (-not $channelName -or $channelName.Trim() -eq "") { $channelName = "未知頻道" }
 
 # 清理非法字元
@@ -74,7 +75,7 @@ if (-not (Test-Path $ChannelDir)) {
 }
 
 # 頻道專屬下載紀錄
-$ArchiveFile = "$channelName.txt"
+$ArchiveFile = Join-Path $ChannelDir "$channelName.txt"
 
 # -----------------------
 # 🧠 自動偵測最佳 client
