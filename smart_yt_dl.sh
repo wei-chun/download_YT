@@ -7,150 +7,122 @@
 # - 依頻道名稱分類資料夾
 # - 各頻道個別下載紀錄
 # - 自動下載字幕、縮圖並內嵌
-# - 支援 cookies（Premium 登入）
 # =============================================================================
 
-# ------------------------
+set -e
+shopt -s extglob
+
+# -----------------------
 # ⚙️ 設定區
-# ------------------------
-CLIENTS=("android_embedded" "tv_embedded" "android" "web_embedded" "web")
-MERGE_FORMAT="mp4"
-SUBTITLE_LANGS="zh-Hant,zh-Hans,en"
-COOKIES_FILE="$(pwd)/cookies.txt"
-AUTO_UPDATE=true
-
-# ------------------------
-# 🔧 函式
-# ------------------------
-write_section() {
-    echo -e "\n==== $1 ===="
-}
-
-update_ytdlp() {
-    if [ "$AUTO_UPDATE" = true ]; then
-        write_section "檢查 yt-dlp 是否為最新版本..."
-        if ! command -v yt-dlp >/dev/null 2>&1; then
-            echo "⚠️ 找不到 yt-dlp，請先安裝。" 
-            return 1
-        fi
-        yt-dlp -U
-    fi
-    return 0
-}
-
-detect_video_type() {
-    if [[ "$VIDEO_URL" =~ "playlist" ]]; then
-        echo "playlist"
-    elif [[ "$VIDEO_URL" =~ "shorts" ]]; then
-        echo "shorts"
-    else
-        echo "video"
-    fi
-}
-
-# ------------------------
-# 🚀 主程式
-# ------------------------
-if [ -z "$1" ]; then
-    echo "請提供影片或播放清單網址"
+# -----------------------
+VideoURL="$1"
+if [[ -z "$VideoURL" ]]; then
+    echo "用法: $0 <YouTube影片或播放清單URL>"
     exit 1
 fi
 
-VIDEO_URL="$1"
+Clients=("android_embedded" "tv_embedded" "android" "web_embedded" "web")
+MergeFormat="mp4"
+SubtitleLangs="zh-Hant,zh-Hans,en"
+CookiesFile="cookies.txt"
 
-write_section "智慧 YouTube 下載器啟動"
-update_ytdlp || exit 1
+# -----------------------
+# 🧠 取得頻道名稱（只取第一個影片）
+# -----------------------
+echo "==== 取得頻道資訊 ===="
 
-TYPE=$(detect_video_type)
-echo "📺 偵測影片類型：$TYPE"
+channelName=$(yt-dlp -j --playlist-items 1 --cookies-from-browser firefox "$VideoURL" 2>/dev/null | jq -r '.channel // empty')
 
-# ------------------------
-# 📡 取得頻道名稱
-# ------------------------
-write_section "取得頻道資訊..."
-CHANNEL_NAME=$(yt-dlp --get-filename -o "%(channel)s" "$VIDEO_URL" 2>/dev/null | head -n1)
-
-if [ -z "$CHANNEL_NAME" ]; then
-    CHANNEL_NAME="未知頻道"
+if [[ -z "$channelName" ]]; then
+    echo "⚠️ JSON 取得頻道名稱失敗，改用 get-filename 備援..."
+    channelName=$(yt-dlp --playlist-items 1 --get-filename -o "%(channel)s" --cookies-from-browser firefox "$VideoURL")
 fi
 
-# 清理非法字元
-CHANNEL_NAME=$(echo "$CHANNEL_NAME" | sed 's/[\\\/:*?"<>|]/_/g')
-CHANNEL_DIR="$(pwd)/$CHANNEL_NAME"
-
-if [ ! -d "$CHANNEL_DIR" ]; then
-    echo "📁 建立資料夾：$CHANNEL_DIR"
-    mkdir -p "$CHANNEL_DIR"
+if [[ -z "$channelName" ]]; then
+    channelName="未知頻道"
 fi
 
-# 頻道專屬下載紀錄
-ARCHIVE_FILE="$CHANNEL_NAME.txt"
+# 清理非法檔名字元
+channelName="${channelName//[\/\\\:\*\?\"<>\|]/_}"
+ChannelDir="./$channelName"
+mkdir -p "$ChannelDir"
 
-# ------------------------
-# 🧠 自動偵測最佳 client
-# ------------------------
-write_section "測試可用 client..."
-BEST_CLIENT=""
-BEST_RES=0
+ArchiveFile="$channelName.txt"
 
-for C in "${CLIENTS[@]}"; do
-    echo -e "\n🧩 測試 client：$C"
-    EXTRA_ARGS="youtube:player_client=$C"
+echo "📺 頻道名稱: $channelName"
 
-    FORMATS_JSON=$(yt-dlp -j --extractor-args "$EXTRA_ARGS" "$VIDEO_URL" 2>/dev/null)
-    if [ -n "$FORMATS_JSON" ]; then
-        RES_LIST=$(echo "$FORMATS_JSON" | jq '.formats[] | select(.height != null) | .height' 2>/dev/null)
-        if [ -n "$RES_LIST" ]; then
-            MAX_RES=$(echo "$RES_LIST" | sort -n | tail -n1)
-            echo "✅ $C 可用最高畫質：${MAX_RES}p"
-            if [ "$MAX_RES" -gt "$BEST_RES" ]; then
-                BEST_RES=$MAX_RES
-                BEST_CLIENT=$C
+# -----------------------
+# 🧩 測試可用 client（只解析第一個影片）
+# -----------------------
+echo "==== 測試可用 client ===="
+bestClient=""
+bestRes=0
+
+for c in "${Clients[@]}"; do
+    echo "🧩 測試 client: $c"
+    formatsJson=$(yt-dlp -j --extractor-args "youtube:player_client=$c" --playlist-items 1 --cookies-from-browser firefox "$VideoURL" 2>/dev/null || true)
+    if [[ -n "$formatsJson" ]]; then
+        maxRes=$(echo "$formatsJson" | jq '[.formats[] | select(.height != null) | .height] | max')
+        if [[ -n "$maxRes" ]]; then
+            echo "✅ $c 可用最高畫質: ${maxRes}p"
+            if (( maxRes > bestRes )); then
+                bestRes=$maxRes
+                bestClient=$c
             fi
         else
-            echo "⚠️ $C 無可用格式"
+            echo "⚠️ $c 無可用格式"
         fi
     else
-        echo "⚠️ $C 無可用格式"
+        echo "⚠️ $c 無可用格式"
     fi
 done
 
-if [ -z "$BEST_CLIENT" ]; then
+if [[ -z "$bestClient" ]]; then
     echo "❌ 找不到可下載格式，請稍後再試。"
     exit 1
 fi
 
-write_section "選擇最佳 client：$BEST_CLIENT（${BEST_RES}p）"
+echo "==== 選擇最佳 client: $bestClient (${bestRes}p) ===="
 
-# ------------------------
+# -----------------------
 # 🗂️ 輸出檔案格式
-# ------------------------
-OUTPUT_PATTERN="$CHANNEL_DIR/%(title)s [%(id)s].%(ext)s"
+# -----------------------
+OutputPattern="$ChannelDir/%(title)s [%(id)s].%(ext)s"
 
-# ------------------------
-# 🎬 下載影片
-# ------------------------
-write_section "開始下載（$BEST_CLIENT，${BEST_RES}p）"
+# -----------------------
+# 🎬 下載影片（支援播放清單多影片）
+# -----------------------
+echo "==== 開始下載 ===="
 
-ARGS=(
-    "-f" "bestvideo+bestaudio/best"
-    "--merge-output-format" "$MERGE_FORMAT"
-    "--extractor-args" "youtube:player_client=$BEST_CLIENT"
-    "--output" "$OUTPUT_PATTERN"
-    "--download-archive" "$ARCHIVE_FILE"
-    "--write-thumbnail" "--embed-thumbnail"
-    "--write-subs" "--write-auto-subs" "--embed-subs"
-    "--sub-langs" "$SUBTITLE_LANGS"
-    "--embed-metadata" "--no-mtime"
-)
+videoList=$(yt-dlp -j --flat-playlist --cookies-from-browser firefox "$VideoURL" 2>/dev/null)
+videoURLs=()
 
-if [ -f "$COOKIES_FILE" ]; then
-    ARGS+=("--cookies" "$COOKIES_FILE")
+if [[ $(echo "$videoList" | jq type) == "\"array\"" ]]; then
+    videoURLs=($(echo "$videoList" | jq -r '.[]?.url'))
+else
+    videoURLs=("$VideoURL")
 fi
 
-ARGS+=("$VIDEO_URL")
+for vid in "${videoURLs[@]}"; do
+    if [[ $vid != http* ]]; then
+        vid="https://www.youtube.com/watch?v=$vid"
+    fi
+    echo "🎬 開始下載影片: $vid"
+    
+    yt-dlp -f "bestvideo+bestaudio/best" \
+        --merge-output-format "$MergeFormat" \
+        --extractor-args "youtube:player_client=$bestClient" \
+        -o "$OutputPattern" \
+        --download-archive "$ArchiveFile" \
+        --write-thumbnail --embed-thumbnail \
+        --write-subs --write-auto-subs --embed-subs \
+        --sub-langs "$SubtitleLangs" \
+        --embed-metadata \
+        --no-mtime \
+        --cookies-from-browser firefox \
+        --newline \
+        "$vid"
+done
 
-yt-dlp "${ARGS[@]}"
-
-write_section "✅ 下載完成！"
-echo "📂 儲存位置：$CHANNEL_DIR"
+echo "==== 全部下載完成 ===="
+echo "📂 儲存位置: $(realpath "$ChannelDir")"

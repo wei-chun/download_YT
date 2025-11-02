@@ -14,6 +14,9 @@ param (
     [string]$VideoURL
 )
 
+[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 # ========================
 # ⚙️ 設定區
 # ========================
@@ -21,7 +24,6 @@ $Clients = @("android_embedded","tv_embedded","android","web_embedded","web")
 $AutoUpdate = $true
 $MergeFormat = "mp4"
 $SubtitleLangs = "zh-Hant,zh-Hans,en"
-$CookiesFile = Join-Path $PSScriptRoot "cookies.txt"
 
 # ========================
 # 🔧 常用函式
@@ -59,26 +61,65 @@ $type = Detect-VideoType
 Write-Host "📺 偵測影片類型：$type" -ForegroundColor Cyan
 
 # -----------------------
-# 📡 取得頻道名稱
+# 📡 取得頻道名稱（UTF-8 + 備援 + 路徑截斷）
 # -----------------------
 Write-Section "取得頻道資訊..."
-$channelName = yt-dlp --get-filename -o "%(channel)s" $VideoURL 2>$null
-$channelName = ($channelName | Select-Object -First 1).ToString()  # 取第一行並轉字串
-if (-not $channelName -or $channelName.Trim() -eq "") { $channelName = "未知頻道" }
+$env:PYTHONUTF8 = "1"
+$channelName = $null
 
-# 清理非法字元
+# 嘗試 JSON 方式，僅取第一個影片
+try {
+    $json = yt-dlp -j --playlist-items 1 --cookies-from-browser firefox $VideoURL | ConvertFrom-Json
+    $channelName = $json.channel
+} catch {
+    $channelName = $null
+}
+
+# 若 JSON 失敗或空值 → 備援用 get-filename
+if (-not $channelName -or $channelName -eq "") {
+    Write-Host "⚠️ JSON 取得頻道名稱失敗，改用 get-filename 備援..." -ForegroundColor Yellow
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "yt-dlp"
+    $psi.Arguments = " --playlist-items 1 --get-filename -o `"%(channel)s`" `"$VideoURL`" --cookies-from-browser firefox"
+    $psi.RedirectStandardOutput = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $channelName = $proc.StandardOutput.ReadToEnd().Trim()
+    $proc.WaitForExit()
+}
+
+if (-not $channelName -or $channelName -eq "") { $channelName = "未知頻道" }
+
+# 清理非法檔名字元
 $channelName = ($channelName -replace '[\\\/:\*\?"<>\|]', "_").Trim()
+
+# ---------- 路徑長度檢查與截斷 ----------
+$MaxFullPath = 250  # Windows 安全上限
 $ChannelDir = Join-Path $PSScriptRoot $channelName
+$MaxChannelLen = $MaxFullPath - ($PSScriptRoot.Length + 1)  # 1 是反斜線
+
+if ($ChannelDir.Length -gt $MaxFullPath) {
+    $channelName = $channelName.Substring(0, [Math]::Min($MaxChannelLen, $channelName.Length))
+    $ChannelDir = Join-Path $PSScriptRoot $channelName
+    Write-Host "⚠️ 頻道名稱過長，已截斷為：" $channelName -ForegroundColor Yellow
+}
+
+Write-Host "📺 頻道名稱：" $channelName -ForegroundColor Yellow
+
 if (-not (Test-Path $ChannelDir)) {
     Write-Host "📁 建立資料夾：$ChannelDir"
     New-Item -ItemType Directory -Path $ChannelDir | Out-Null
 }
 
 # 頻道專屬下載紀錄
-$ArchiveFile = Join-Path $ChannelDir "$channelName.txt"
+$ArchiveFile = Join-Path $PSScriptRoot "$channelName.txt"
 
 # -----------------------
-# 🧠 自動偵測最佳 client
+# 🧠 自動偵測最佳 client（只測第一個影片）
 # -----------------------
 Write-Section "測試可用 client..."
 $bestClient = ""; $bestRes = 0
@@ -87,7 +128,8 @@ foreach ($c in $Clients) {
     Write-Host "`n🧩 測試 client：$c"
     $extraArgs = "youtube:player_client=$c"
     try {
-        $formats = yt-dlp -j --extractor-args $extraArgs $VideoURL 2>$null | ConvertFrom-Json
+        # 只取第一個影片 JSON
+        $formats = yt-dlp -j --playlist-items 1 --extractor-args $extraArgs --cookies-from-browser firefox $VideoURL 2>$null | ConvertFrom-Json
     } catch { continue }
 
     if ($formats -and $formats.formats) {
@@ -130,10 +172,10 @@ $Args = @(
     "--write-thumbnail","--embed-thumbnail",
     "--write-subs","--write-auto-subs","--embed-subs",
     "--sub-langs",$SubtitleLangs,
-    "--embed-metadata","--no-mtime"
+    "--embed-metadata","--no-mtime",
+    "--cookies-from-browser","firefox"
 )
 
-if (Test-Path $CookiesFile) { $Args += @("--cookies",$CookiesFile) }
 $Args += $VideoURL
 
 yt-dlp @Args

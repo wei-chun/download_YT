@@ -1,14 +1,14 @@
-Smart-YTDLP
+﻿# Smart-YTDLP
 
 智慧 YouTube 下載器（PowerShell & macOS Bash 版本）
 
 ---
 
-功能特色
+## 功能特色
 
 - 自動偵測最佳 YouTube client（android_embedded / tv_embedded / android / web_embedded / web）  
 - 自動下載影片、字幕、縮圖，並內嵌字幕與縮圖  
-- 依 頻道名稱 自動建立資料夾整理影片  
+- 依 **頻道名稱** 自動建立資料夾整理影片  
 - 自動下載播放清單內所有影片到頻道資料夾  
 - 支援 cookies 登入（Premium / 受限影片）  
 - 自動維護頻道專屬下載紀錄，避免重複下載  
@@ -17,88 +17,78 @@ Smart-YTDLP
 
 ---
 
-使用說明
+## 使用說明
 
-1️⃣ 單影片下載
+### 1️⃣ 單影片下載
 
-PowerShell：
-.\Smart-YTDLP.ps1 "https://www.youtube.com/watch?v=影片ID"
+#### PowerShell
+.\Smart-YTDLP.ps1 ""https://www.youtube.com/watch?v=影片ID""
 
-macOS Bash：
-./Smart-YTDLP.sh "https://www.youtube.com/watch?v=影片ID"
+#### macOS Bash
+./Smart-YTDLP.sh ""https://www.youtube.com/watch?v=影片ID""
 
-影片會自動下載至以頻道名稱命名的資料夾中。
+### 2️⃣ 播放清單下載
 
----
+#### PowerShell
+.\Smart-YTDLP.ps1 ""https://www.youtube.com/playlist?list=播放清單ID""
 
-2️⃣ 播放清單下載
-
-PowerShell：
-.\Smart-YTDLP.ps1 "https://www.youtube.com/playlist?list=播放清單ID"
-
-macOS Bash：
-./Smart-YTDLP.sh "https://www.youtube.com/playlist?list=播放清單ID"
-
-播放清單內所有影片會自動下載到該頻道資料夾中，並且不會重複下載已完成的影片。
+#### macOS Bash
+./Smart-YTDLP.sh ""https://www.youtube.com/playlist?list=播放清單ID""
 
 ---
 
-3️⃣ 高級設定
+## cookies.txt 使用說明
 
-- 字幕語言  
-  在程式內可修改 $SubtitleLangs（PowerShell）或 SUBTITLE_LANGS（macOS Bash）  
-  範例：zh-Hant,zh-Hans,en
+若要下載受限影片或 Premium 會員影片，需要提供 cookies：
 
-- 影片格式與合併  
-  預設下載最佳畫質影片與音訊並合併為 mp4，可修改 $MergeFormat 或 MERGE_FORMAT。
+1. 使用 Chrome / Edge 登入 YouTube 帳號  
+2. 安裝擴充工具「Get cookies.txt」或其他相容工具  
+3. 匯出 cookies 到 Smart-YTDLP 目錄下，檔名為 cookies.txt  
+4. 腳本會自動使用 cookies.txt  
 
-- Cookies 登入  
-  將 cookies.txt 放在程式同一資料夾，即可下載受限影片或 Premium 影片。
-
-- 下載紀錄  
-  每個頻道會在資料夾中建立 頻道名稱.txt，避免重複下載。
+> 注意：請不要分享 cookies.txt，裡面包含帳號資訊。
 
 ---
 
-4️⃣ 注意事項
+## 檔案結構示意
 
-- PowerShell 版本需相容 PowerShell 5.1  
-- macOS 版本需安裝 yt-dlp 與 jq  
-  安裝指令：brew install yt-dlp jq  
-- 確保程式有執行權限：chmod +x Smart-YTDLP.sh
-
----
-
-5️⃣ 範例結構
-
-下載完成後，資料夾結構示意：
-
-./頻道名稱/
-├─ 影片標題1 [影片ID].mp4
-├─ 影片標題1 [影片ID].jpg
-├─ 影片標題1 [影片ID].vtt
-├─ 影片標題2 [影片ID].mp4
-├─ 頻道名稱.txt  # 下載紀錄
+Smart-YTDLP/
+├─ Smart-YTDLP.ps1
+├─ Smart-YTDLP.sh
+├─ README.md
+├─ cookies.txt
+├─ [頻道名稱].txt
+└─ [頻道名稱]/
+    ├─ 影片1.mp4
+    ├─ 影片2.mp4
+    └─ 影片1.jpg
 
 ---
 
-6️⃣ 更新 yt-dlp
+## 注意事項
 
-PowerShell：yt-dlp -U
-
-macOS Bash：brew upgrade yt-dlp
+- 確保已安裝 yt-dlp  
+  - PowerShell 可直接使用 yt-dlp -U 更新  
+  - macOS 建議使用 Homebrew 安裝：rew install yt-dlp  
+- Windows PowerShell 需版本 5.1 以上  
+- macOS Bash 需 macOS 10.12+ 並允許執行腳本  
+- 下載影片將依頻道名稱建立資料夾存放  
+- 若 yt-dlp 無法抓到影片資訊，請確認影片是否受限或被移除  
 
 ---
 
-7️⃣ 常見問題
+## 錯誤排除提示
 
-1. 找不到 yt-dlp  
-   → 請先安裝 yt-dlp（PowerShell 建議放在 PATH，macOS 建議使用 Homebrew）。
+1. 無法取得頻道名稱
+2. 下載失敗或中斷
+3. 影片重複下載
 
-2. 下載受限影片失敗  
-   → 請使用 cookies.txt 登入後再下載。
+---
 
-3. 影片或播放清單下載失敗  
-   → 嘗試更新 yt-dlp 或檢查影片 URL 是否正確。
-"""
+## 建議操作順序
 
+1. 安裝 yt-dlp  
+2. 準備 cookies.txt（如有需要）  
+3. 執行腳本下載影片或播放清單  
+4. 影片會依頻道建立資料夾，自動整理  
+5. 定期更新 yt-dlp 以支援最新 YouTube 變更
